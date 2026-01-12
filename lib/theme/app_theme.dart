@@ -13,6 +13,7 @@ class AppColors {
   // Inactive
   static const Color inactive = Color(0xFF4A5E8A);
   static const Color textSecondary = Color(0xFF8A9BB8);
+  static const Color borderColor = Color(0xFF2A2F3A);
 }
 
 class AppTheme {

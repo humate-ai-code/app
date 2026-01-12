@@ -133,6 +133,12 @@ class OpticalFiberPainter extends CustomPainter {
         path.moveTo(start.dx, start.dy);
         
         // Control point: mid-point + random offset perpendicular to the line
+        final midX = (start.dx + end.dx) / 2;
+        
+        // Simple randomization for organic feel
+        final offsetX = (rand.nextDouble() - 0.5) * 100;
+        final offsetY = (rand.nextDouble() - 0.5) * 50;
+
         final controlPoint1 = Offset(midX + offsetX, start.dy + offsetY);
         final controlPoint2 = Offset(midX - offsetX, end.dy - offsetY);
         

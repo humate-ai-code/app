@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_app/models/device_model.dart';
@@ -13,11 +15,9 @@ class DeviceHubScreen extends StatefulWidget {
 }
 
 class _DeviceHubScreenState extends State<DeviceHubScreen> {
-  // Device List
+  // Device List starts with just the placeholder for current phone
   final List<DeviceModel> _devices = [
     DeviceModel(id: 'phone', icon: Icons.smartphone, label: 'Phone', isConnected: true),
-    DeviceModel(id: 'watch', icon: Icons.watch, label: 'Watch', isConnected: false),
-    DeviceModel(id: 'buds', icon: Icons.headphones, label: 'Earbuds', isConnected: true),
   ];
 
   List<Offset> _connectedOffsets = [];
@@ -25,19 +25,63 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
   @override
   void initState() {
     super.initState();
+    _fetchDeviceName();
     // Schedule initial position check after layout
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _updateConnectionOffsets();
     });
   }
 
+  Future<void> _fetchDeviceName() async {
+    final deviceInfo = DeviceInfoPlugin();
+    String deviceName = 'Phone';
+
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        deviceName = '${androidInfo.brand} ${androidInfo.model}';
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        deviceName = iosInfo.name;
+      }
+    } catch (e) {
+      // Fallback to generic name on error or web/other platforms
+    }
+
+    if (mounted) {
+      setState(() {
+        // Update the first device (Phone) label
+        if (_devices.isNotEmpty) {
+           // We need to replace the object or mutable field to update UI?
+           // DeviceModel fields are final except isConnected.
+           // Let's replace the item in the list.
+           final oldPhone = _devices[0];
+           _devices[0] = DeviceModel(
+               id: oldPhone.id, 
+               icon: oldPhone.icon, 
+               label: deviceName, 
+               isConnected: oldPhone.isConnected
+           );
+           // We need to keep the key if we want animation continuity, but recreating it is fine for label change on load.
+           // Actually DeviceModel creates a new GlobalKey() in constructor.
+           // If we replace it, we lose the key and might flicker.
+           // Better to make label mutable or just accept the flicker on startup. 
+           // Given the prompt "Data class" in plan, I made fields final.
+           // Let's just swap it.
+        }
+      });
+      // Updating label might change width slightly, so update offsets
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _updateConnectionOffsets();
+      });
+    }
+  }
+
   void _toggleDevice(int index) {
     setState(() {
       _devices[index].isConnected = !_devices[index].isConnected;
     });
-    // Give time for animation/layout if needed, though simple state change doesn't move widgets 
-    // usually. But let's trigger update.
-    // We wait one frame to ensure visual state is settled if it affects layout (it doesn't here, strictly, but good practice).
+    
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _updateConnectionOffsets();
     });
@@ -46,22 +90,10 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
   void _updateConnectionOffsets() {
     final List<Offset> newOffsets = [];
     
-    // We also need the position of the ContextEngineView relative to the overlay 
-    // to map coordinates correctly if we were drawing globally.
-    // However, our ContextEngineView is in a Stack filling the screen.
-    // So if we find the global position of the device point, and convert it 
-    // to the local coordinate system of the ContextEngineView (which is fullscreen), 
-    // it should match.
-
     for (final device in _devices) {
       if (device.isConnected && device.key.currentContext != null) {
         final RenderBox box = device.key.currentContext!.findRenderObject() as RenderBox;
         final Offset center = box.localToGlobal(box.size.center(Offset.zero));
-        
-        // Pass global coordinate. ContextEngineView is fullscreen in stack, so global ~ local.
-        // (Assuming standard Scaffold body starting top-left or similar).
-        // To be safe, we can convert it to the coordinate space of the ContextEngineView if we had a key for it.
-        // For now, assuming Full Screen Stack so Global == Local.
         newOffsets.add(center);
       }
     }
@@ -71,26 +103,76 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
     });
   }
 
+  void _showAddDeviceOptions() {
+      showModalBottomSheet(
+          context: context,
+          backgroundColor: Colors.transparent,
+          builder: (context) => Container(
+              decoration: BoxDecoration(
+                  color: AppColors.cardBackground,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: SafeArea(
+                  child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                          Container(
+                              margin: const EdgeInsets.only(top: 10, bottom: 20),
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(2),
+                              ),
+                          ),
+                          _buildAddOption(Icons.watch, "Smartwatch"),
+                          _buildAddOption(Icons.headphones, "Earbuds"),
+                          const SizedBox(height: 20),
+                      ],
+                  ),
+              ),
+          ),
+      );
+  }
+
+  Widget _buildAddOption(IconData icon, String label) {
+      return ListTile(
+          leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                  color: Colors.black,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.borderColor),
+              ),
+              child: Icon(icon, color: Colors.white),
+          ),
+          title: Text(
+              label, 
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+          ),
+          onTap: () {
+              Navigator.pop(context); // Close sheet
+              ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text(
+                          "$label currently not supported",
+                          style: const TextStyle(color: Colors.black),
+                      ),
+                      backgroundColor: AppColors.neonGreen,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+              );
+          },
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // Logic: 
-          // 1. We render the layout.
-          // 2. We put ContextEngineView BEHIND the content or ON TOP?
-          // If ON TOP, it blocks clicks. If BEHIND, lines go under widgets.
-          // Lines under widgets is usually better looking for "plugging in".
-          // BUT, we want lines to go into the Engine.
-          
-          // Let's do:
-          // BACKGROUND: Gradient/Color
-          // LAYER 1: ContextEngineView (The Engine + Lines) (Ignoring hits so clicks pass through?)
-          // LAYER 2: Foreground Content (Text, Device Grid)
-          
-          // Actually, ContextEngineView needs to be aware of where things are.
-          // We can put it in the background of the stack.
-          
           Positioned.fill(
              child: ContextEngineView(connectedDeviceOffsets: _connectedOffsets),
           ),
@@ -104,28 +186,24 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
                    child: Column(
                        mainAxisAlignment: MainAxisAlignment.center,
                        children: [
-                           // Spacer to push Grid down away from Engine (which is centered)
-                           // Engine is centered in the Stack/View.
-                           // We need to make sure we don't cover it?
-                           // Actually the Engine is drawn by ContextEngineView.
-                           // We just need the Grid to be positioned where we want it.
-                           
-                           // Let's rely on the background view to draw the engine.
-                           // We just put empty space here.
                            const SizedBox(height: 300), 
                            
                            // Device Grid
                            Row(
-                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                               mainAxisAlignment: MainAxisAlignment.center, // Center chips since we might only have one
                                children: _devices.asMap().entries.map((entry) {
                                    final index = entry.key;
                                    final device = entry.value;
-                                   return DeviceGridItem(
-                                       key: device.key, // Assign GlobalKey
-                                       icon: device.icon,
-                                       label: device.label,
-                                       isConnected: device.isConnected,
-                                       onTap: () => _toggleDevice(index),
+                                   // Add spacing if not first
+                                   return Padding(
+                                       padding: const EdgeInsets.symmetric(horizontal: 10),
+                                       child: DeviceGridItem(
+                                           key: device.key, // Assign GlobalKey
+                                           icon: device.icon,
+                                           label: device.label,
+                                           isConnected: device.isConnected,
+                                           onTap: () => _toggleDevice(index),
+                                       ),
                                    );
                                }).toList(),
                            ),
@@ -134,8 +212,6 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
                ),
             ],
           ),
-          
-          // Bottom Dock - Removed as it is now in MainScaffold
         ],
       ),
     );
@@ -169,13 +245,13 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
             ),
             IconButton(
               icon: const Icon(Icons.add, color: Colors.white),
-              onPressed: () {},
+              onPressed: _showAddDeviceOptions,
             ),
           ],
         ),
       ),
     );
   }
-
-
 }
+
+
