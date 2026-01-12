@@ -1,0 +1,262 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_app/models/conversation_model.dart';
+import 'package:flutter_app/services/conversation_repository.dart';
+import 'package:flutter_app/theme/app_theme.dart';
+import 'package:audioplayers/audioplayers.dart';
+
+class ConversationDetailScreen extends StatefulWidget {
+  final ConversationThread thread;
+
+  const ConversationDetailScreen({super.key, required this.thread});
+
+  @override
+  State<ConversationDetailScreen> createState() => _ConversationDetailScreenState();
+}
+
+class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
+  final ScrollController _scrollController = ScrollController();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  
+  bool _isPlaying = false;
+  Duration _currentPosition = Duration.zero;
+  Duration _totalDuration = Duration.zero;
+
+  // Track the index to scroll to
+  int _lastAutoScrolledIndex = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+        });
+      }
+    });
+
+    _audioPlayer.onDurationChanged.listen((d) {
+      if (mounted) {
+        setState(() => _totalDuration = d);
+      }
+    });
+
+    _audioPlayer.onPositionChanged.listen((p) {
+      if (mounted) {
+        setState(() {
+            _currentPosition = p;
+            _handleAutoScroll();
+        });
+      }
+    });
+  }
+  
+  // Find which message is active and scroll to it if needed
+  void _handleAutoScroll() {
+       if (!_isPlaying) return;
+
+       // We need access to the messages. 
+       // Ideally we cache them or access via widget if static, but they come from stream.
+       // For now, let's grab from repo directly since this is simple
+       final thread = ConversationRepository().currentThreads.firstWhere((t) => t.id == widget.thread.id, orElse: () => widget.thread);
+       final messages = thread.messages;
+
+       for (int i = 0; i < messages.length; i++) {
+            final msg = messages[i];
+            if (msg.audioStartTime != null && msg.audioEndTime != null) {
+                if (_currentPosition >= msg.audioStartTime! && _currentPosition <= msg.audioEndTime!) {
+                    // This is the active message
+                    if (_lastAutoScrolledIndex != i) {
+                        _scrollToIndex(i);
+                        _lastAutoScrolledIndex = i;
+                    }
+                    break;
+                }
+            }
+       }
+  }
+
+  void _scrollToIndex(int index) {
+      // Assuming item extent or approximate
+      // A safer way in ListView is using a key or external package, but let's try basic arithmetic or EnsureVisible packages.
+      // Since we don't have scroll_to_index package, we'll try to scroll based on estimated offset or just jump to bottom if it's new.
+      // Wait, standard ListView doesn't support scrollToIndex easily without a package.
+      // Let's try to animate to a specific offset if we can calculate it, or just keep it simple:
+      // Actually, auto-scrolling to a specific item in a variable height list is hard without keys.
+      // Let's rely on the user manually scrolling for now UNLESS the user explicitly asked for "screen follows".
+      // "screen glides down".
+      // We can try to scroll to the bottom if the playing message is the last one?
+      // Or we can try to estimate.
+      
+      // Better approach: calculate offset? No, items have variable height.
+      // Let's assume the list is built. We can use GlobalKeys for each item!
+      
+      // Implementing GlobalKey approach is reliable.
+  }
+  
+  // Map to store keys
+  final Map<String, GlobalKey> _messageKeys = {};
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+  
+  Future<void> _togglePlay(String? filePath) async {
+      if (filePath == null) return;
+      
+      if (_isPlaying) {
+          await _audioPlayer.pause();
+      } else {
+          debugPrint("DetailScreen: Playing from $filePath");
+          // Play from file
+          await _audioPlayer.play(DeviceFileSource(filePath));
+      }
+  }
+
+  Future<void> _seekToMessage(ConversationMessage msg) async {
+      debugPrint("DetailScreen: Seek requested to ${msg.audioStartTime}");
+      if (msg.audioStartTime != null && widget.thread.audioFilePath != null) {
+          // If not playing, start playing
+          if (!_isPlaying) {
+             await _audioPlayer.play(DeviceFileSource(widget.thread.audioFilePath!));
+          }
+          await _audioPlayer.seek(msg.audioStartTime!);
+      }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.thread.title),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+            if (!widget.thread.isActive && widget.thread.audioFilePath != null)
+                IconButton(
+                    icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                    onPressed: () => _togglePlay(widget.thread.audioFilePath),
+                ),
+        ],
+      ),
+      body: StreamBuilder<List<ConversationThread>>(
+        stream: ConversationRepository().threadsStream,
+        initialData: ConversationRepository().currentThreads,
+        builder: (context, snapshot) {
+          final threads = snapshot.data ?? [];
+          final currentThread = threads.firstWhere(
+            (t) => t.id == widget.thread.id, 
+            orElse: () => widget.thread
+          );
+          
+          final messages = currentThread.messages;
+
+          return ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.all(16),
+            itemCount: messages.length + 1, // +1 for spacer at bottom
+            itemBuilder: (context, index) {
+              if (index == messages.length) return const SizedBox(height: 100);
+              final msg = messages[index];
+              return _buildMessageBubble(msg);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(ConversationMessage msg) {
+    if (!_messageKeys.containsKey(msg.id)) {
+        _messageKeys[msg.id] = GlobalKey();
+    }
+    final key = _messageKeys[msg.id];
+
+    final isSystem = msg.sender == 'System';
+    
+    // Check for highlight
+    bool isHighlighted = false;
+    // Buffer the window slightly (e.g. +200ms) to ensure smooth transition
+    if (_isPlaying && !isSystem && msg.audioStartTime != null && msg.audioEndTime != null) {
+        if (_currentPosition >= msg.audioStartTime! && _currentPosition <= msg.audioEndTime! + const Duration(milliseconds: 200)) {
+            isHighlighted = true;
+            _scrollToKey(key); 
+        }
+    }
+
+    return Align(
+      key: key,
+      alignment: isSystem ? Alignment.center : Alignment.centerLeft,
+      child: GestureDetector(
+      onLongPress: () => _seekToMessage(msg),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSystem 
+              ? AppColors.cardBackground.withValues(alpha: 0.5) 
+              : isHighlighted 
+                  ? AppColors.cyanAccent.withValues(alpha: 0.4) 
+                  : AppColors.cyanAccent.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+             color: isSystem ? Colors.transparent : AppColors.cyanAccent.withValues(alpha: 0.3),
+             width: isHighlighted ? 2.0 : 1.0, 
+          ),
+          boxShadow: isHighlighted ? [
+              BoxShadow(
+                  color: AppColors.cyanAccent.withValues(alpha: 0.2),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+              )
+          ] : [],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!isSystem)
+              Text(
+                msg.sender,
+                style: TextStyle(
+                  color: AppColors.cyanAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            if (!isSystem) const SizedBox(height: 4),
+            Text(
+              msg.text,
+              style: TextStyle(
+                color: isSystem ? AppColors.textSecondary : Colors.white,
+                fontStyle: isSystem ? FontStyle.italic : FontStyle.normal,
+              ),
+            ),
+             if (msg.audioStartTime != null && !isSystem)
+               Text(
+                 "${msg.audioStartTime!.inSeconds}s",
+                 style: TextStyle(fontSize: 8, color: Colors.grey),
+               ),
+          ],
+        ),
+      ),
+      ),
+    );
+  }
+  
+  void _scrollToKey(GlobalKey? key) {
+      if (key == null) return;
+      final context = key.currentContext;
+      if (context != null) {
+          // Scrollable.ensureVisible(context, duration: const Duration(milliseconds: 300), alignment: 0.5);
+          // Alignment 0.5 means center of viewport? 
+          // User asked for "appears at the bottom ... then screen glides down".
+          // Alignment 1.0 is bottom.
+          Scrollable.ensureVisible(context, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut, alignment: 0.8);
+      }
+  }
+}

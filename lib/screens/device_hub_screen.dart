@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_app/models/device_model.dart';
 import 'package:flutter_app/screens/device_detail_screen.dart';
+import 'package:flutter_app/services/context_action_service.dart';
+import 'package:flutter_app/services/device_repository.dart';
 import 'package:flutter_app/theme/app_theme.dart';
 import 'package:flutter_app/widgets/context_engine_view.dart';
 import 'package:flutter_app/widgets/device_grid_item.dart';
@@ -16,18 +18,7 @@ class DeviceHubScreen extends StatefulWidget {
 }
 
 class _DeviceHubScreenState extends State<DeviceHubScreen> {
-  // Device List starts with just the placeholder for current phone
-  final List<DeviceModel> _devices = [
-    DeviceModel(
-        id: 'phone', 
-        icon: Icons.smartphone, 
-        label: 'Phone', 
-        isConnected: true,
-        sensors: [
-            SensorModel(id: 'mic', icon: Icons.mic, label: 'Microphone', isConnected: true),
-        ],
-    ),
-  ];
+  // No local _devices list anymore
 
   List<Offset> _connectedOffsets = [];
 
@@ -35,9 +26,12 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
   void initState() {
     super.initState();
     _fetchDeviceName();
+    // Initialize Action Service
+    ContextActionService().init();
+    
     // Schedule initial position check after layout
     SchedulerBinding.instance.addPostFrameCallback((_) {
-      _updateConnectionOffsets();
+      _updateConnectionOffsets(DeviceRepository().currentDevices);
     });
   }
 
@@ -58,49 +52,26 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
     }
 
     if (mounted) {
-      setState(() {
-        // Update the first device (Phone) label
-        if (_devices.isNotEmpty) {
-           // We need to replace the object or mutable field to update UI?
-           // DeviceModel fields are final except isConnected.
-           // Let's replace the item in the list.
-           final oldPhone = _devices[0];
-           _devices[0] = DeviceModel(
-               id: oldPhone.id, 
-               icon: oldPhone.icon, 
-               label: deviceName, 
-               isConnected: oldPhone.isConnected,
-               sensors: oldPhone.sensors, // Preserve sensors
-           );
-           // We need to keep the key if we want animation continuity, but recreating it is fine for label change on load.
-           // Actually DeviceModel creates a new GlobalKey() in constructor.
-           // If we replace it, we lose the key and might flicker.
-           // Better to make label mutable or just accept the flicker on startup. 
-           // Given the prompt "Data class" in plan, I made fields final.
-           // Let's just swap it.
-        }
-      });
-      // Updating label might change width slightly, so update offsets
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _updateConnectionOffsets();
-      });
+       DeviceRepository().updateDeviceName('phone', deviceName);
     }
   }
 
-  void _toggleDevice(int index) {
-    setState(() {
-      _devices[index].isConnected = !_devices[index].isConnected;
-    });
+  void _toggleDevice(String id) {
+    DeviceRepository().toggleDeviceConnection(id);
     
+    // UI updates via StreamBuilder now
+    // Offsets update needs to happen after rebuild?
+    // We can hook into the StreamBuilder or use a listener.
+    // simpler: schedule a frame check
     SchedulerBinding.instance.addPostFrameCallback((_) {
-      _updateConnectionOffsets();
+      _updateConnectionOffsets(DeviceRepository().currentDevices);
     });
   }
 
-  void _updateConnectionOffsets() {
+  void _updateConnectionOffsets(List<DeviceModel> devices) {
     final List<Offset> newOffsets = [];
     
-    for (final device in _devices) {
+    for (final device in devices) {
       if (device.isConnected && device.key.currentContext != null) {
         final RenderBox box = device.key.currentContext!.findRenderObject() as RenderBox;
         final Offset center = box.localToGlobal(box.size.center(Offset.zero));
@@ -178,6 +149,54 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
       );
   }
 
+  void _showSettingsDialog() {
+      showDialog(
+          context: context,
+          builder: (context) {
+              String selected = ContextActionService().currentProvider;
+              return StatefulBuilder(
+                  builder: (context, setDialogState) {
+                      return AlertDialog(
+                          backgroundColor: AppColors.cardBackground,
+                          title: const Text("Transcription Provider", style: TextStyle(color: Colors.white)),
+                          content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                  _buildRadioOption("Sherpa-ONNX (Offline)", "Sherpa", selected, (val) => setDialogState(() => selected = val!)),
+                                  _buildRadioOption("Android Speech (On-Device)", "Android", selected, (val) => setDialogState(() => selected = val!)),
+                                  _buildRadioOption("ElevenLabs (Cloud)", "ElevenLabs", selected, (val) => setDialogState(() => selected = val!)),
+                              ],
+                          ),
+                          actions: [
+                              TextButton(
+                                  child: const Text("Cancel"),
+                                  onPressed: () => Navigator.pop(context),
+                              ),
+                              TextButton(
+                                  child: const Text("Save", style: TextStyle(color: AppColors.cyanAccent)),
+                                  onPressed: () {
+                                      ContextActionService().switchProvider(selected);
+                                      Navigator.pop(context);
+                                  },
+                              ),
+                          ],
+                      );
+                  },
+              );
+          },
+      );
+  }
+
+  Widget _buildRadioOption(String label, String value, String groupValue, ValueChanged<String?> onChanged) {
+      return RadioListTile<String>(
+          title: Text(label, style: const TextStyle(color: Colors.white)),
+          value: value,
+          groupValue: groupValue,
+          onChanged: onChanged,
+          activeColor: AppColors.cyanAccent,
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -193,52 +212,59 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
             children: [
                _buildHeader(),
                Expanded(
-                   child: Column(
-                       mainAxisAlignment: MainAxisAlignment.center,
-                       children: [
-                           const SizedBox(height: 300), 
+                   child: StreamBuilder<List<DeviceModel>>(
+                       stream: DeviceRepository().devicesStream,
+                       initialData: DeviceRepository().currentDevices,
+                       builder: (context, snapshot) {
+                           final devices = snapshot.data ?? [];
                            
-                           // Device Grid
-                           Row(
-                               mainAxisAlignment: MainAxisAlignment.center, // Center chips since we might only have one
-                               children: _devices.asMap().entries.map((entry) {
-                                   final index = entry.key;
-                                   final device = entry.value;
-                                   // Add spacing if not first
-                                   return Padding(
-                                       padding: const EdgeInsets.symmetric(horizontal: 10),
-                                       child: DeviceGridItem(
-                                           key: device.key, // Assign GlobalKey
-                                           icon: device.icon,
-                                           label: device.label,
-                                           isConnected: device.isConnected,
-                                           onTap: () => _toggleDevice(index),
-                                           onLongPress: () async {
-                                               await Navigator.of(context).push(
-                                                   PageRouteBuilder(
-                                                       pageBuilder: (context, animation, secondaryAnimation) => DeviceDetailScreen(device: device),
-                                                       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                                           const begin = Offset(0.0, 1.0);
-                                                           const end = Offset.zero;
-                                                           const curve = Curves.ease;
-                                                           var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                                                           return SlideTransition(position: animation.drive(tween), child: child);
-                                                       },
-                                                   ),
-                                               );
-                                               // Refresh state when returning from detail screen
-                                               if (mounted) {
-                                                   setState(() {});
-                                                   SchedulerBinding.instance.addPostFrameCallback((_) {
-                                                       _updateConnectionOffsets();
-                                                   });
-                                               }
-                                           },
-                                       ),
-                                   );
-                               }).toList(),
-                           ),
-                       ],
+                           // Schedule offset update on every rebuild?
+                           // Risky for perf but needed for accurate lines.
+                           // Or specific trigger.
+                           WidgetsBinding.instance.addPostFrameCallback((_) {
+                               _updateConnectionOffsets(devices);
+                           });
+
+                           return Column(
+                               mainAxisAlignment: MainAxisAlignment.center,
+                               children: [
+                                   const SizedBox(height: 300), 
+                                   
+                                   // Device Grid
+                                   Row(
+                                       mainAxisAlignment: MainAxisAlignment.center, 
+                                       children: devices.asMap().entries.map((entry) {
+                                           final device = entry.value;
+                                           return Padding(
+                                               padding: const EdgeInsets.symmetric(horizontal: 10),
+                                               child: DeviceGridItem(
+                                                   key: device.key, // Assign GlobalKey
+                                                   icon: device.icon,
+                                                   label: device.label,
+                                                   isConnected: device.isConnected,
+                                                   onTap: () => _toggleDevice(device.id),
+                                                   onLongPress: () async {
+                                                       await Navigator.of(context).push(
+                                                           PageRouteBuilder(
+                                                               pageBuilder: (context, animation, secondaryAnimation) => DeviceDetailScreen(device: device),
+                                                               transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                                                   const begin = Offset(0.0, 1.0);
+                                                                   const end = Offset.zero;
+                                                                   const curve = Curves.ease;
+                                                                   var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                                                                   return SlideTransition(position: animation.drive(tween), child: child);
+                                                               },
+                                                           ),
+                                                       );
+                                                       // Refresh handled by stream
+                                                   },
+                                               ),
+                                           );
+                                       }).toList(),
+                                   ),
+                               ],
+                           );
+                       },
                    ),
                ),
             ],
@@ -258,7 +284,16 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
           children: [
             IconButton(
               icon: const Icon(Icons.settings_outlined, color: Colors.white),
-              onPressed: () {},
+              onPressed: () {
+                  final phone = DeviceRepository().currentDevices.firstWhere((d) => d.id == 'phone');
+                  if (phone.isConnected) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Disconnect phone to change settings")),
+                      );
+                      return;
+                  }
+                  _showSettingsDialog();
+              },
             ),
             ShaderMask(
               shaderCallback: (bounds) => const LinearGradient(
