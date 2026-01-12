@@ -6,6 +6,7 @@ class DeviceGridItem extends StatelessWidget {
   final String label;
   final bool isConnected;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const DeviceGridItem({
     super.key,
@@ -13,12 +14,14 @@ class DeviceGridItem extends StatelessWidget {
     required this.label,
     required this.isConnected,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

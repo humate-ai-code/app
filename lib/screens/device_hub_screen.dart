@@ -3,6 +3,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_app/models/device_model.dart';
+import 'package:flutter_app/screens/device_detail_screen.dart';
 import 'package:flutter_app/theme/app_theme.dart';
 import 'package:flutter_app/widgets/context_engine_view.dart';
 import 'package:flutter_app/widgets/device_grid_item.dart';
@@ -17,7 +18,15 @@ class DeviceHubScreen extends StatefulWidget {
 class _DeviceHubScreenState extends State<DeviceHubScreen> {
   // Device List starts with just the placeholder for current phone
   final List<DeviceModel> _devices = [
-    DeviceModel(id: 'phone', icon: Icons.smartphone, label: 'Phone', isConnected: true),
+    DeviceModel(
+        id: 'phone', 
+        icon: Icons.smartphone, 
+        label: 'Phone', 
+        isConnected: true,
+        sensors: [
+            SensorModel(id: 'mic', icon: Icons.mic, label: 'Microphone', isConnected: true),
+        ],
+    ),
   ];
 
   List<Offset> _connectedOffsets = [];
@@ -60,7 +69,8 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
                id: oldPhone.id, 
                icon: oldPhone.icon, 
                label: deviceName, 
-               isConnected: oldPhone.isConnected
+               isConnected: oldPhone.isConnected,
+               sensors: oldPhone.sensors, // Preserve sensors
            );
            // We need to keep the key if we want animation continuity, but recreating it is fine for label change on load.
            // Actually DeviceModel creates a new GlobalKey() in constructor.
@@ -203,6 +213,27 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
                                            label: device.label,
                                            isConnected: device.isConnected,
                                            onTap: () => _toggleDevice(index),
+                                           onLongPress: () async {
+                                               await Navigator.of(context).push(
+                                                   PageRouteBuilder(
+                                                       pageBuilder: (context, animation, secondaryAnimation) => DeviceDetailScreen(device: device),
+                                                       transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                                           const begin = Offset(0.0, 1.0);
+                                                           const end = Offset.zero;
+                                                           const curve = Curves.ease;
+                                                           var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                                                           return SlideTransition(position: animation.drive(tween), child: child);
+                                                       },
+                                                   ),
+                                               );
+                                               // Refresh state when returning from detail screen
+                                               if (mounted) {
+                                                   setState(() {});
+                                                   SchedulerBinding.instance.addPostFrameCallback((_) {
+                                                       _updateConnectionOffsets();
+                                                   });
+                                               }
+                                           },
                                        ),
                                    );
                                }).toList(),

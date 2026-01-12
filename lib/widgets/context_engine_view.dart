@@ -4,10 +4,12 @@ import 'package:flutter_app/theme/app_theme.dart';
 
 class ContextEngineView extends StatefulWidget {
   final List<Offset> connectedDeviceOffsets;
+  final Widget? centerWidget;
 
   const ContextEngineView({
     super.key,
     required this.connectedDeviceOffsets,
+    this.centerWidget,
   });
 
   @override
@@ -55,7 +57,7 @@ class _ContextEngineViewState extends State<ContextEngineView>
           },
         ),
         
-        // Center Node: Context Engine Chip
+        // Center Node: Context Engine Chip or Custom Widget
         Positioned(
           // subtle pulsing glow
           child: AnimatedBuilder(
@@ -75,7 +77,7 @@ class _ContextEngineViewState extends State<ContextEngineView>
                 child: child,
               );
             },
-            child: _buildNodeIcon(Icons.memory, size: 60, isMain: true),
+            child: widget.centerWidget ?? _buildNodeIcon(Icons.memory, size: 60, isMain: true),
           ),
         ),
       ],
