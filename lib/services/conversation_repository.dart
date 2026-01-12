@@ -120,6 +120,26 @@ class ConversationRepository {
       // Force update
       _controller.add(_threads);
   }
+  
+  void updateLastMessageSpeaker(String speakerId) {
+       if (_activeThread == null || _activeThread!.messages.isEmpty) return;
+       
+       final lastMessage = _activeThread!.messages.last;
+       // Replace message with new speakerId
+       final updatedMessage = ConversationMessage(
+           id: lastMessage.id,
+           sender: lastMessage.sender, // We might update this to Speaker Name too if we want
+           text: lastMessage.text,
+           timestamp: lastMessage.timestamp,
+           speakerId: speakerId,
+           audioStartTime: lastMessage.audioStartTime,
+           audioEndTime: lastMessage.audioEndTime,
+       );
+       
+       _activeThread!.messages.removeLast();
+       _activeThread!.messages.add(updatedMessage);
+       _controller.add(_threads);
+  }
 }
 
 String _formatDate(DateTime dt) {

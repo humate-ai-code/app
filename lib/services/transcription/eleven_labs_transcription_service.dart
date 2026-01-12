@@ -11,6 +11,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
+import 'package:flutter_app/services/speaker_recognition_service.dart';
+import 'package:flutter_app/services/speaker_repository.dart';
 
 import 'transcription_service.dart';
 
@@ -27,6 +29,7 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
   WebSocketChannel? _channel;
   final AudioRecorder _audioRecorder = AudioRecorder();
   bool _isListening = false;
+  String? _currentAudioFilePath; // Store path for speaker ID access
   
   // Map "speaker_0" to "Alice" etc.
   final Map<String, String> _speakerNames = {};
@@ -59,6 +62,8 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
         // 1. Prepare Audio File
         final dir = await getApplicationDocumentsDirectory();
         final filePath = '${dir.path}/session_${DateTime.now().millisecondsSinceEpoch}.wav';
+        _currentAudioFilePath = filePath;
+        
         final file = File(filePath);
         final raf = await file.open(mode: FileMode.write);
         
@@ -67,6 +72,10 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
         await raf.writeFrom(List.filled(44, 0));
         
         ConversationRepository().startNewSession(provider: 'ElevenLabs', audioFilePath: filePath);
+        
+        // Init Speaker Services (lazy)
+        SpeakerRepository().init();
+        SpeakerRecognitionService().init();
         
         // 2. Connect WS
         final url = Uri(
@@ -112,6 +121,8 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
                 sampleRate: 16000,
                 numChannels: 1,
             ));
+            
+            _streamCompleter = Completer<void>();
 
             int chunkCount = 0;
             
@@ -122,7 +133,7 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
                 if (!_isListening) return;
                 
                 // Write audio to local file
-                _audioFileRaf?.writeFrom(data);
+                _audioFileRaf?.writeFromSync(data);
 
                 chunkCount++;
                 if (chunkCount % 50 == 0) {
@@ -135,6 +146,11 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
                     "sample_rate": 16000,
                 };
                 _channel?.sink.add(jsonEncode(audioMsg));
+            }, onDone: () {
+                debugPrint("ElevenLabs: Mic Stream Done");
+                if (_streamCompleter?.isCompleted == false) {
+                    _streamCompleter?.complete();
+                }
             });
             debugPrint("ElevenLabs: Started Streaming to $filePath");
 
@@ -148,6 +164,7 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
   }
 
   RandomAccessFile? _audioFileRaf;
+  Completer<void>? _streamCompleter;
 
 
 
@@ -202,6 +219,7 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
                           }
                       }
 
+                      bool isTimestampUpdate = false;
                       if (_hasActivePartial) {
                           ConversationRepository().updateLastMessageInActiveSession(text, sender: senderName, audioEndTime: audioEnd);
                           _hasActivePartial = false; 
@@ -218,17 +236,23 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
                                       audioStartTime: audioStart,
                                       audioEndTime: audioEnd
                                   );
+                                  isTimestampUpdate = true;
                               } else {
                                   debugPrint("ElevenLabs: Ignoring duplicate commit for '$text' (no timestamps)");
+                                  return;
                               }
-                              return;
+                          } else {
+                              ConversationRepository().addMessageToActiveSession(senderName, text, speakerId: speakerId, audioStartTime: audioStart, audioEndTime: audioEnd);
                           }
-                          
-                           ConversationRepository().addMessageToActiveSession(senderName, text, speakerId: speakerId, audioStartTime: audioStart, audioEndTime: audioEnd);
                       }
                       
                       _onFinalizedTextController.add(text);
                       debugPrint("ElevenLabs Final: $text (Time: $audioStart - $audioEnd)");
+                      
+                      // Trigger Speaker ID if we have valid audio range and file
+                      if ((audioStart != null && audioEnd != null) && _currentAudioFilePath != null) {
+                          _identifySpeaker(text, audioStart, audioEnd, isDuplicate: isTimestampUpdate);
+                      }
                   }
               } else if (type == 'session_started') {
                   debugPrint("ElevenLabs: Session Started ${data['session_id']}");
@@ -251,11 +275,17 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
     debugPrint("ElevenLabs: Stopped");
     
     // Allow any pending write operations to complete
-    // In a real app, we might check an async lock or queue.
-    // simpler fix: small delay or ensure sequential writes.
-    // Since stream listener is async, we can't easily guarantee it's done writing
-    // unless we track it.
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Wait for stream to actually finish (onDone called)
+    if (_streamCompleter != null) {
+        try {
+            debugPrint("ElevenLabs: Waiting for stream to convert/finish...");
+            await _streamCompleter!.future.timeout(const Duration(seconds: 2));
+        } catch (e) {
+             debugPrint("ElevenLabs: Stream wait timeout/error: $e");
+        }
+    } else {
+        await Future.delayed(const Duration(milliseconds: 500));
+    }
 
     // Finalize WAV Header
     if (_audioFileRaf != null) {
@@ -315,5 +345,30 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
   Future<void> _writeInt16(RandomAccessFile raf, int value) async {
       await raf.writeByte(value & 0xFF);
       await raf.writeByte((value >> 8) & 0xFF);
+  }
+  
+  Future<void> _identifySpeaker(String text, Duration start, Duration end, {bool isDuplicate = false}) async {
+      if (_currentAudioFilePath == null) return;
+      
+      // Extract embedding
+      // We assume the audio file has the data for [start, end].
+      final embedding = await SpeakerRecognitionService().extractEmbedding(
+          _currentAudioFilePath!, 
+          start, 
+          end
+      );
+      
+      if (embedding != null) {
+          final speaker = await SpeakerRepository().identify(embedding);
+          debugPrint("ElevenLabs: Identified speaker ${speaker.name} (${speaker.id}) for '$text'");
+          
+          // Update the message
+          ConversationRepository().updateLastMessageSpeaker(speaker.id);
+          
+          // Optional: Update the "sender" field if it was generic "Speaker"
+          // We can do that inside ConversationRepository or separate call.
+      } else {
+          debugPrint("ElevenLabs: Could not extract embedding for speaker ID.");
+      }
   }
 }

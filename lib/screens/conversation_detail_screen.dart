@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/models/conversation_model.dart';
+import 'package:flutter_app/models/speaker_model.dart';
 import 'package:flutter_app/services/conversation_repository.dart';
+import 'package:flutter_app/services/speaker_repository.dart';
 import 'package:flutter_app/theme/app_theme.dart';
 import 'package:audioplayers/audioplayers.dart';
 
@@ -19,7 +21,6 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
   
   bool _isPlaying = false;
   Duration _currentPosition = Duration.zero;
-  Duration _totalDuration = Duration.zero;
 
   // Track the index to scroll to
   int _lastAutoScrolledIndex = -1;
@@ -33,12 +34,6 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         setState(() {
           _isPlaying = state == PlayerState.playing;
         });
-      }
-    });
-
-    _audioPlayer.onDurationChanged.listen((d) {
-      if (mounted) {
-        setState(() => _totalDuration = d);
       }
     });
 
@@ -178,6 +173,15 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
 
     final isSystem = msg.sender == 'System';
     
+    // Resolve Speaker
+    Speaker? speaker;
+    if (msg.speakerId != null) {
+        speaker = SpeakerRepository().getSpeaker(msg.speakerId);
+    }
+    
+    final isUser = speaker?.isUser ?? false;
+    final displayName = speaker?.name ?? msg.sender;
+    
     // Check for highlight
     bool isHighlighted = false;
     // Buffer the window slightly (e.g. +200ms) to ensure smooth transition
@@ -187,22 +191,52 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
             _scrollToKey(key); 
         }
     }
+    
+    // Color Logic
+    Color bubbleColor;
+    if (isSystem) {
+        bubbleColor = AppColors.cardBackground.withValues(alpha: 0.5);
+    } else if (isUser) {
+        bubbleColor = AppColors.cyanAccent.withValues(alpha: 0.2); // User Color
+    } else {
+        // Deterministic color for other speakers
+        if (speaker != null) {
+            // Hash the ID to get a color hue?
+            // Simple approach: predefined colors based on hash
+            final hash = speaker.id.hashCode;
+            final hue = (hash % 360).toDouble();
+            final hsl = HSLColor.fromAHSL(1.0, hue, 0.6, 0.4); // Darkish
+            bubbleColor = hsl.toColor().withValues(alpha: 0.3);
+        } else {
+            bubbleColor = AppColors.cyanAccent.withValues(alpha: 0.1); // Default
+        }
+    }
+    
+    if (isHighlighted) {
+        bubbleColor = bubbleColor.withValues(alpha: 0.6); // Highlight brighter
+    }
 
     return Align(
       key: key,
-      alignment: isSystem ? Alignment.center : Alignment.centerLeft,
+      alignment: isSystem 
+          ? Alignment.center 
+          : isUser 
+              ? Alignment.centerRight 
+              : Alignment.centerLeft,
       child: GestureDetector(
-      onLongPress: () => _seekToMessage(msg),
+      onLongPress: () => _showMessageOptions(context, msg, speaker),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isSystem 
-              ? AppColors.cardBackground.withValues(alpha: 0.5) 
-              : isHighlighted 
-                  ? AppColors.cyanAccent.withValues(alpha: 0.4) 
-                  : AppColors.cyanAccent.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
+          color: bubbleColor,
+          borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(12),
+              topRight: const Radius.circular(12),
+              bottomLeft: isUser ? const Radius.circular(12) : const Radius.circular(2),
+              bottomRight: isUser ? const Radius.circular(2) : const Radius.circular(12),
+          ),
           border: Border.all(
              color: isSystem ? Colors.transparent : AppColors.cyanAccent.withValues(alpha: 0.3),
              width: isHighlighted ? 2.0 : 1.0, 
@@ -221,7 +255,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           children: [
             if (!isSystem)
               Text(
-                msg.sender,
+                displayName,
                 style: TextStyle(
                   color: AppColors.cyanAccent,
                   fontWeight: FontWeight.bold,
@@ -246,6 +280,82 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       ),
       ),
     );
+  }
+  
+  void _showMessageOptions(BuildContext context, ConversationMessage msg, Speaker? speaker) {
+      showModalBottomSheet(
+          context: context,
+          builder: (context) {
+              return Wrap(
+                  children: [
+                      ListTile(
+                          leading: const Icon(Icons.play_circle_outline),
+                          title: const Text('Play from here'),
+                          onTap: () {
+                              Navigator.pop(context);
+                              _seekToMessage(msg);
+                          },
+                      ),
+                      if (speaker != null) ...[
+                          const Divider(),
+                          ListTile(
+                              leading: const Icon(Icons.edit),
+                              title: const Text('Rename Speaker'),
+                              onTap: () {
+                                  Navigator.pop(context);
+                                  _showRenameDialog(context, speaker);
+                              },
+                          ),
+                          ListTile(
+                              leading: const Icon(Icons.person),
+                              title: const Text('This is Me'),
+                              subtitle: Text(speaker.isUser ? "Currently set as you" : "Set this speaker as you"),
+                              onTap: () async {
+                                  await SpeakerRepository().setAsUser(speaker.id);
+                                  if (context.mounted) {
+                                      Navigator.pop(context);
+                                      // Refresh UI
+                                      setState(() {});
+                                  }
+                              },
+                          ),
+                      ],
+                  ],
+              );
+          }
+      );
+  }
+  
+  void _showRenameDialog(BuildContext context, Speaker speaker) {
+      final controller = TextEditingController(text: speaker.name);
+      showDialog(
+          context: context, 
+          builder: (context) {
+              return AlertDialog(
+                  title: const Text("Rename Speaker"),
+                  content: TextField(
+                      controller: controller,
+                      decoration: const InputDecoration(labelText: "Name"),
+                  ),
+                  actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text("Cancel"),
+                      ),
+                      TextButton(
+                          onPressed: () async {
+                              if (controller.text.isNotEmpty) {
+                                  await SpeakerRepository().updateSpeakerName(speaker.id, controller.text);
+                                  if (mounted) setState(() {});
+                              }
+                              if (context.mounted) Navigator.pop(context);
+                          },
+                          child: const Text("Save"),
+                      ),
+                  ],
+              );
+          }
+      );
   }
   
   void _scrollToKey(GlobalKey? key) {
