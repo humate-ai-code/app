@@ -8,7 +8,7 @@ import 'package:flutter_app/services/transcription/transcription_service.dart';
 
 import 'package:flutter_app/services/transcription/android_transcription_service.dart';
 import 'package:flutter_app/services/transcription/eleven_labs_transcription_service.dart';
-import 'package:flutter_app/services/device_repository.dart';
+import 'package:flutter_app/repositories/device_repository.dart';
 
 class ContextActionService {
   static final ContextActionService _instance = ContextActionService._internal();

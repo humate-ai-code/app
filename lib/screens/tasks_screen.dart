@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/theme/app_theme.dart';
 import 'package:flutter_app/models/task_model.dart';
-import 'package:flutter_app/services/task_repository.dart';
+import 'package:flutter_app/repositories/task_repository.dart';
 import 'package:flutter_app/screens/task_detail_screen.dart';
 
 

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/theme/app_theme.dart';
-import 'package:flutter_app/services/conversation_repository.dart';
-import 'package:flutter_app/services/task_repository.dart';
-import 'package:flutter_app/services/speaker_repository.dart';
+import 'package:flutter_app/repositories/conversation_repository.dart';
+import 'package:flutter_app/repositories/task_repository.dart';
+import 'package:flutter_app/repositories/speaker_repository.dart';
 import 'package:flutter_app/services/context_action_service.dart';
 
 class SettingsScreen extends StatelessWidget {

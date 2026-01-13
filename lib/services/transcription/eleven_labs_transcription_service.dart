@@ -5,14 +5,14 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_app/services/conversation_repository.dart';
+import 'package:flutter_app/repositories/conversation_repository.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:flutter_app/services/speaker_recognition_service.dart';
-import 'package:flutter_app/services/speaker_repository.dart';
+import 'package:flutter_app/repositories/speaker_repository.dart';
 
 import 'transcription_service.dart';
 

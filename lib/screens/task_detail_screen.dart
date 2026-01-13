@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/models/task_model.dart';
 import 'package:flutter_app/screens/conversation_detail_screen.dart';
-import 'package:flutter_app/services/conversation_repository.dart';
+import 'package:flutter_app/repositories/conversation_repository.dart';
 import 'package:flutter_app/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 

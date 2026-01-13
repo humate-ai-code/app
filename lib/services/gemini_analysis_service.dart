@@ -4,8 +4,8 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app/models/conversation_model.dart';
 import 'package:flutter_app/models/task_model.dart';
-import 'package:flutter_app/services/conversation_repository.dart';
-import 'package:flutter_app/services/task_repository.dart';
+import 'package:flutter_app/repositories/conversation_repository.dart';
+import 'package:flutter_app/repositories/task_repository.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 

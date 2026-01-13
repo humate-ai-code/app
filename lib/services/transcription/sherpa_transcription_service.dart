@@ -8,7 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
-import 'package:flutter_app/services/conversation_repository.dart';
+import 'package:flutter_app/repositories/conversation_repository.dart';
 
 import 'transcription_service.dart';
 

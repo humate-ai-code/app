@@ -6,7 +6,7 @@ import 'package:flutter_app/models/device_model.dart';
 import 'package:flutter_app/screens/device_detail_screen.dart';
 import 'package:flutter_app/screens/settings_screen.dart';
 import 'package:flutter_app/services/context_action_service.dart';
-import 'package:flutter_app/services/device_repository.dart';
+import 'package:flutter_app/repositories/device_repository.dart';
 import 'package:flutter_app/theme/app_theme.dart';
 import 'package:flutter_app/widgets/context_engine_view.dart';
 import 'package:flutter_app/widgets/device_grid_item.dart';

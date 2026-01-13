@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/models/conversation_model.dart';
 import 'package:flutter_app/models/speaker_model.dart';
-import 'package:flutter_app/services/conversation_repository.dart';
-import 'package:flutter_app/services/speaker_repository.dart';
+import 'package:flutter_app/repositories/conversation_repository.dart';
+import 'package:flutter_app/repositories/speaker_repository.dart';
 import 'package:flutter_app/theme/app_theme.dart';
 import 'package:audioplayers/audioplayers.dart';
 

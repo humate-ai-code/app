@@ -4,9 +4,9 @@ import 'package:flutter_app/theme/app_theme.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_app/services/gemini_analysis_service.dart';
-import 'package:flutter_app/services/conversation_repository.dart';
-import 'package:flutter_app/services/task_repository.dart';
-import 'package:flutter_app/services/speaker_repository.dart';
+import 'package:flutter_app/repositories/conversation_repository.dart';
+import 'package:flutter_app/repositories/task_repository.dart';
+import 'package:flutter_app/repositories/speaker_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
