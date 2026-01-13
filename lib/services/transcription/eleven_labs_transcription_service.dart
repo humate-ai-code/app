@@ -17,14 +17,7 @@ import 'package:flutter_app/services/speaker_repository.dart';
 import 'transcription_service.dart';
 
 class ElevenLabsTranscriptionService implements TranscriptionService {
-  final _onFinalizedTextController = StreamController<String>.broadcast();
-  final _onPartialTextController = StreamController<String>.broadcast();
 
-  @override
-  Stream<String> get onFinalizedText => _onFinalizedTextController.stream;
-
-  @override
-  Stream<String> get onPartialText => _onPartialTextController.stream;
 
   WebSocketChannel? _channel;
   final AudioRecorder _audioRecorder = AudioRecorder();
@@ -181,7 +174,7 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
               if (type == 'partial_transcript') {
                   final text = data['text'] as String? ?? "";
                   if (text.isNotEmpty) {
-                      _onPartialTextController.add(text);
+
                       
                       // Update UI bubble
                       String speakerId = "user"; // Guess default
@@ -246,7 +239,7 @@ class ElevenLabsTranscriptionService implements TranscriptionService {
                           }
                       }
                       
-                      _onFinalizedTextController.add(text);
+
                       debugPrint("ElevenLabs Final: $text (Time: $audioStart - $audioEnd)");
                       
                       // Trigger Speaker ID if we have valid audio range and file

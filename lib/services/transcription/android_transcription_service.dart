@@ -9,14 +9,7 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'transcription_service.dart';
 
 class AndroidTranscriptionService implements TranscriptionService {
-  final _onFinalizedTextController = StreamController<String>.broadcast();
-  final _onPartialTextController = StreamController<String>.broadcast();
 
-  @override
-  Stream<String> get onFinalizedText => _onFinalizedTextController.stream;
-
-  @override
-  Stream<String> get onPartialText => _onPartialTextController.stream;
 
   final SpeechToText _speechToText = SpeechToText();
   bool _isInitialized = false;
@@ -92,7 +85,7 @@ class AndroidTranscriptionService implements TranscriptionService {
       if (result.finalResult) {
           debugPrint("AndroidSTT: Final: ${result.recognizedWords}");
           ConversationRepository().addMessageToActiveSession('User', result.recognizedWords);
-          _onFinalizedTextController.add(result.recognizedWords);
+
           
           // Android STT stops after final result usually, so we might need to restart?
           // For continuous:
@@ -102,7 +95,7 @@ class AndroidTranscriptionService implements TranscriptionService {
              // But for now let's behave like standard dictation.
           }
       } else {
-          _onPartialTextController.add(result.recognizedWords);
+        // Partial results ignored for now, or add Repo update here
       }
   }
 

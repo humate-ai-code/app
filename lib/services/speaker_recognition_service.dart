@@ -51,12 +51,6 @@ class SpeakerRecognitionService {
         if (_extractor == null) return null;
 
         try {
-            // Sherpa Extractor usually takes a stream or raw samples.
-            // We need to read the WAV file segment.
-            // Since we can't easily slice a WAV file on disk without reading it, 
-            // and Sherpa's API usually expects a full stream or file read.
-            // Actually, sherpa-onnx-flutter might have a `createStream` that accepts samples.
-            
             // 1. Read the audio file
             final file = File(audioPath);
             if (!await file.exists()) return null;
@@ -69,7 +63,6 @@ class SpeakerRecognitionService {
             final pcmData = bytes.sublist(44); 
             
             // 3. Slice the data based on sample rate (16000) * 2 bytes/sample (16-bit)
-            // 16000 * 2 = 32000 bytes per second.
             
             final startByte = start.inMilliseconds * 32; // (ms * 16 * 2) -> ms * 32
             final endByte = end.inMilliseconds * 32;

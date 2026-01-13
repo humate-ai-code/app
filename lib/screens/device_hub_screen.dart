@@ -191,7 +191,9 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
       return RadioListTile<String>(
           title: Text(label, style: const TextStyle(color: Colors.white)),
           value: value,
+          // ignore: deprecated_member_use
           groupValue: groupValue,
+          // ignore: deprecated_member_use
           onChanged: onChanged,
           activeColor: AppColors.cyanAccent,
       );

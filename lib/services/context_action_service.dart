@@ -71,9 +71,6 @@ class ContextActionService {
 
     // Listeners can be used for UI feedback or debugging, 
     // but the Service itself now updates the Repository.
-    _transcriptionService.onFinalizedText.listen((text) {
-      debugPrint("ActionService ($provider): Text Finalized: $text");
-    });
   }
 
   // Renamed from updateState to internal handler
@@ -99,11 +96,9 @@ class ContextActionService {
     if (!_isInitialized) await init();
     
     await _transcriptionService.start();
-    // _isListening = true;
   }
 
   Future<void> _stopListening() async {
     await _transcriptionService.stop();
-    // _isListening = false;
   }
 }

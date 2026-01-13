@@ -13,14 +13,7 @@ import 'package:flutter_app/services/conversation_repository.dart';
 import 'transcription_service.dart';
 
 class SherpaTranscriptionService implements TranscriptionService {
-  final _onFinalizedTextController = StreamController<String>.broadcast();
-  final _onPartialTextController = StreamController<String>.broadcast();
 
-  @override
-  Stream<String> get onFinalizedText => _onFinalizedTextController.stream;
-
-  @override
-  Stream<String> get onPartialText => _onPartialTextController.stream;
 
   bool _isInitialized = false;
   bool _isListening = false;
@@ -105,12 +98,12 @@ class SherpaTranscriptionService implements TranscriptionService {
                if (isEndpoint) {
                  debugPrint("SherpaService: Endpoint. Final: ${result.text}");
                  ConversationRepository().addMessageToActiveSession('Unknown', result.text);
-                 _onFinalizedTextController.add(result.text);
+
                  _recognizer?.reset(_stream!);
                } else {
                  // Partial
                  // ConversationRepository().updateLiveMessage ... (Future feature)
-                 _onPartialTextController.add(result.text);
+
                }
             }
         });
