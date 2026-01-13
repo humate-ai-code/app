@@ -112,6 +112,19 @@ class SpeakerRepository {
       }
   }
 
+  Future<void> reset() async {
+      _speakers.clear();
+      try {
+          final dir = await getApplicationDocumentsDirectory();
+          final file = File('${dir.path}/speakers.json');
+          if (await file.exists()) {
+              await file.delete();
+          }
+      } catch (e) {
+          debugPrint("SpeakerRepo: Error clearing speakers: $e");
+      }
+  }
+
   // --- Math ---
 
   double _cosineSimilarity(List<double> v1, List<double> v2) {

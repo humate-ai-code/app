@@ -2,7 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_app/screens/main_scaffold.dart';
 import 'package:flutter_app/theme/app_theme.dart';
 
-void main() {
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_app/services/gemini_analysis_service.dart';
+import 'package:flutter_app/services/conversation_repository.dart';
+import 'package:flutter_app/services/task_repository.dart';
+import 'package:flutter_app/services/speaker_repository.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
+  
+  // Initialize services
+  await SpeakerRepository().init();
+  await ConversationRepository().init();
+  await TaskRepository().init();
+  await GeminiAnalysisService().init();
+  
   runApp(const IntelligenceCenterApp());
 }
 

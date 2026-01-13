@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app/theme/app_theme.dart';
+import 'package:flutter_app/models/task_model.dart';
+import 'package:flutter_app/services/task_repository.dart';
+import 'package:flutter_app/screens/task_detail_screen.dart';
+
 
 class TasksScreen extends StatelessWidget {
   const TasksScreen({super.key});
@@ -12,31 +16,36 @@ class TasksScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildTaskItem(
-            'Upload Daily Logs',
-            'Pending verification',
-            false,
-          ),
-          _buildTaskItem(
-            'Calibrate Sensors',
-            'Completed successfully',
-            true,
-          ),
-          _buildTaskItem(
-            'Secure Channel Sync',
-            'Key rotation required',
-            false,
-            isCritical: true,
-          ),
-          _buildTaskItem(
-            'Archive Old Signals',
-            'Scheduled for 0400',
-            false,
-          ),
-        ],
+      body: StreamBuilder<List<Task>>(
+        stream: TaskRepository().tasksStream,
+        initialData: TaskRepository().currentTasks,
+        builder: (context, snapshot) {
+          final tasks = snapshot.data ?? [];
+          if (tasks.isEmpty) {
+             return Center(
+                 child: Text("No missions detected yet.", style: TextStyle(color: Colors.white.withValues(alpha: 0.5))),
+             );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: tasks.length,
+            itemBuilder: (context, index) {
+              final task = tasks[index];
+              return GestureDetector(
+                onTap: () {
+                    // Navigate to detail
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => TaskDetailScreen(task: task)));
+                },
+                child: _buildTaskItem(
+                  task.title,
+                  task.status,
+                  task.isCompleted,
+                  isCritical: task.dueDate?.difference(DateTime.now()).inDays == 0, // Critical if due today
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

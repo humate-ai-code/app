@@ -49,7 +49,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   }
 
   Widget _buildThreadItem(ConversationThread thread) {
-    final lastMessage = thread.messages.isNotEmpty ? thread.messages.last.text : 'Empty Session';
+    final lastMessage = thread.summary != null 
+        ? "Summary: ${thread.summary}" 
+        : (thread.messages.isNotEmpty ? thread.messages.last.text : 'Empty Session');
+    
+    final isSummary = thread.summary != null;
     
     return GestureDetector(
       onTap: () {
@@ -83,16 +87,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        thread.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                      Expanded(
+                        child: Text(
+                          thread.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         _formatTime(thread.startTime),
                         style: TextStyle(
@@ -106,10 +114,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   Text(
                     lastMessage,
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: isSummary ? AppColors.purpleAccent : AppColors.textSecondary,
                       fontSize: 14,
+                      fontStyle: isSummary ? FontStyle.italic : FontStyle.normal,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],

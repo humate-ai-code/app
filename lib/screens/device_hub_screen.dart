@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_app/models/device_model.dart';
 import 'package:flutter_app/screens/device_detail_screen.dart';
+import 'package:flutter_app/screens/settings_screen.dart';
 import 'package:flutter_app/services/context_action_service.dart';
 import 'package:flutter_app/services/device_repository.dart';
 import 'package:flutter_app/theme/app_theme.dart';
@@ -149,55 +150,7 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
       );
   }
 
-  void _showSettingsDialog() {
-      showDialog(
-          context: context,
-          builder: (context) {
-              String selected = ContextActionService().currentProvider;
-              return StatefulBuilder(
-                  builder: (context, setDialogState) {
-                      return AlertDialog(
-                          backgroundColor: AppColors.cardBackground,
-                          title: const Text("Transcription Provider", style: TextStyle(color: Colors.white)),
-                          content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                  _buildRadioOption("Sherpa-ONNX (Offline)", "Sherpa", selected, (val) => setDialogState(() => selected = val!)),
-                                  _buildRadioOption("Android Speech (On-Device)", "Android", selected, (val) => setDialogState(() => selected = val!)),
-                                  _buildRadioOption("ElevenLabs (Cloud)", "ElevenLabs", selected, (val) => setDialogState(() => selected = val!)),
-                              ],
-                          ),
-                          actions: [
-                              TextButton(
-                                  child: const Text("Cancel"),
-                                  onPressed: () => Navigator.pop(context),
-                              ),
-                              TextButton(
-                                  child: const Text("Save", style: TextStyle(color: AppColors.cyanAccent)),
-                                  onPressed: () {
-                                      ContextActionService().switchProvider(selected);
-                                      Navigator.pop(context);
-                                  },
-                              ),
-                          ],
-                      );
-                  },
-              );
-          },
-      );
-  }
 
-  Widget _buildRadioOption(String label, String value, String groupValue, ValueChanged<String?> onChanged) {
-      return RadioListTile<String>(
-          title: Text(label, style: const TextStyle(color: Colors.white)),
-          value: value,
-          // ignore: deprecated_member_use
-          groupValue: groupValue,
-          // ignore: deprecated_member_use
-          onChanged: onChanged,
-          activeColor: AppColors.cyanAccent,
-      );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -287,14 +240,10 @@ class _DeviceHubScreenState extends State<DeviceHubScreen> {
             IconButton(
               icon: const Icon(Icons.settings_outlined, color: Colors.white),
               onPressed: () {
-                  final phone = DeviceRepository().currentDevices.firstWhere((d) => d.id == 'phone');
-                  if (phone.isConnected) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Disconnect phone to change settings")),
-                      );
-                      return;
-                  }
-                  _showSettingsDialog();
+                  // Allow settings even if connected, but maybe warn?
+                  // The user requested reset option, which might be needed anytime.
+                  // Transcription switch might arguably be blocked while recording, but let SettingsScreen handle that or just let it replace.
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
               },
             ),
             ShaderMask(

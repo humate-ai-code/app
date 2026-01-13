@@ -8,8 +8,9 @@ import 'package:audioplayers/audioplayers.dart';
 
 class ConversationDetailScreen extends StatefulWidget {
   final ConversationThread thread;
+  final String? initialMessageId;
 
-  const ConversationDetailScreen({super.key, required this.thread});
+  const ConversationDetailScreen({super.key, required this.thread, this.initialMessageId});
 
   @override
   State<ConversationDetailScreen> createState() => _ConversationDetailScreenState();
@@ -46,6 +47,25 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
       }
     });
   }
+  
+  @override
+  void didChangeDependencies() {
+      super.didChangeDependencies();
+      // Handle initial scroll if provided
+      if (widget.initialMessageId != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+               // We need to wait for list to render
+               // A simple delay or relying on keys
+               Future.delayed(const Duration(milliseconds: 500), () {
+                   if (_messageKeys.containsKey(widget.initialMessageId)) {
+                       _scrollToKey(_messageKeys[widget.initialMessageId]);
+                       // Also highlight?
+                   }
+               });
+          });
+      }
+  }
+
   
   // Find which message is active and scroll to it if needed
   void _handleAutoScroll() {
@@ -150,22 +170,41 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           
           final messages = currentThread.messages;
 
-          return ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(16),
-            itemCount: messages.length + 1, // +1 for spacer at bottom
-            itemBuilder: (context, index) {
-              if (index == messages.length) return const SizedBox(height: 100);
-              final msg = messages[index];
-              return _buildMessageBubble(msg);
-            },
+          return Column(
+             children: [
+                 if (currentThread.summary != null)
+                    Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        color: AppColors.purpleAccent.withValues(alpha: 0.1),
+                        child: Text(
+                             "SUMMARY: ${currentThread.summary}",
+                             style: TextStyle(color: AppColors.purpleAccent, fontSize: 12, fontStyle: FontStyle.italic),
+                        ),
+                    ),
+                 Expanded(
+                   child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: messages.length + 1, // +1 for spacer at bottom
+                    itemBuilder: (context, index) {
+                      if (index == messages.length) return const SizedBox(height: 100);
+                      final msg = messages[index];
+                      // Highlight if it matches initial ID
+                      final isTarget = widget.initialMessageId == msg.id;
+                      return _buildMessageBubble(msg, forceHighlight: isTarget);
+                    },
+                   ),
+                 ),
+             ],
           );
         },
       ),
     );
   }
 
-  Widget _buildMessageBubble(ConversationMessage msg) {
+  Widget _buildMessageBubble(ConversationMessage msg, {bool forceHighlight = false}) {
+
     if (!_messageKeys.containsKey(msg.id)) {
         _messageKeys[msg.id] = GlobalKey();
     }
@@ -212,7 +251,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
         }
     }
     
-    if (isHighlighted) {
+    if (isHighlighted || forceHighlight) {
         bubbleColor = bubbleColor.withValues(alpha: 0.6); // Highlight brighter
     }
 
@@ -239,7 +278,7 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen> {
           ),
           border: Border.all(
              color: isSystem ? Colors.transparent : AppColors.cyanAccent.withValues(alpha: 0.3),
-             width: isHighlighted ? 2.0 : 1.0, 
+             width: (isHighlighted || forceHighlight) ? 2.0 : 1.0, 
           ),
           boxShadow: isHighlighted ? [
               BoxShadow(
